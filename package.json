@@ -1,7 +1,7 @@
 {
-  "name": "mushroom-cards",
-  "version": "3.6.0",
-  "description": "Home Assistant Mushroom Cards",
+  "name": "free-cards",
+  "version": "0.0.1",
+  "description": "Home Assistant Free Cards",
   "main": "index.js",
   "scripts": {
     "start": "rollup -c --watch --bundleConfigAsCjs",

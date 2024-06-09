@@ -1,3 +1,15 @@
+/*
+*
+*
+*
+* Modified by amr21code
+*
+*
+*
+*
+*/
+
+import { UnsubscribeFunc } from "home-assistant-js-websocket";
 import { css, CSSResultGroup, html, nothing, PropertyValues, TemplateResult } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
@@ -15,6 +27,8 @@ import {
     isAvailable,
     LovelaceCard,
     LovelaceCardEditor,
+	RenderTemplateResult,
+	subscribeRenderTemplate,
 } from "../../ha";
 import "../../shared/badge-icon";
 import "../../shared/button";
@@ -33,7 +47,7 @@ import { COVER_CARD_EDITOR_NAME, COVER_CARD_NAME, COVER_ENTITY_DOMAINS } from ".
 import "./controls/cover-buttons-control";
 import "./controls/cover-position-control";
 import "./controls/cover-tilt-position-control";
-import { CoverCardConfig } from "./cover-card-config";
+import { FreeCoverCardConfig } from "./cover-card-config";
 import { getPosition, getStateColor } from "./utils";
 
 type CoverCardControl = "buttons_control" | "position_control" | "tilt_position_control";
@@ -46,13 +60,24 @@ const CONTROLS_ICONS: Record<CoverCardControl, string> = {
 
 registerCustomCard({
     type: COVER_CARD_NAME,
-    name: "Mushroom Cover Card",
+    name: "Free Cover Card",
     description: "Card for cover entity",
 });
 
+const TEMPLATE_KEYS = [
+    "icon",
+    "icon_color",
+    "badge_color",
+    "badge_icon",
+    "primary",
+    "secondary",
+    "picture",
+] as const;
+type TemplateKey = (typeof TEMPLATE_KEYS)[number];
+
 @customElement(COVER_CARD_NAME)
-export class CoverCard
-    extends MushroomBaseCard<CoverCardConfig, CoverEntity>
+export class CoverCardCustom
+    extends MushroomBaseCard<FreeCoverCardConfig, CoverEntity>
     implements LovelaceCard
 {
     public static async getConfigElement(): Promise<LovelaceCardEditor> {
@@ -60,20 +85,27 @@ export class CoverCard
         return document.createElement(COVER_CARD_EDITOR_NAME) as LovelaceCardEditor;
     }
 
-    public static async getStubConfig(hass: HomeAssistant): Promise<CoverCardConfig> {
+    public static async getStubConfig(hass: HomeAssistant): Promise<FreeCoverCardConfig> {
         const entities = Object.keys(hass.states);
         const covers = entities.filter((e) => COVER_ENTITY_DOMAINS.includes(e.split(".")[0]));
         return {
             type: `custom:${COVER_CARD_NAME}`,
+			secondary: "Test",
             entity: covers[0],
         };
     }
+
+	@state() private _unsubRenderTemplates: Map<TemplateKey, Promise<UnsubscribeFunc>> = new Map();
 
     protected get hasControls(): boolean {
         return this._controls.length > 0;
     }
 
     @state() private _activeControl?: CoverCardControl;
+
+	@state() private _templateResults: Partial<
+		Record<TemplateKey, RenderTemplateResult | undefined>
+	> = {};
 
     get _nextControl(): CoverCardControl | undefined {
         if (this._activeControl) {
@@ -93,7 +125,7 @@ export class CoverCard
         return 1;
     }
 
-    setConfig(config: CoverCardConfig): void {
+    setConfig(config: FreeCoverCardConfig): void {
         super.setConfig({
             tap_action: {
                 action: "toggle",
@@ -134,6 +166,7 @@ export class CoverCard
         if (this.hass && changedProperties.has("hass")) {
             this.updatePosition();
             this.updateActiveControl();
+			this._tryConnect();
         }
     }
 
@@ -145,17 +178,32 @@ export class CoverCard
         const stateObj = this._stateObj;
 
         if (!stateObj) return;
-        this.position = getPosition(stateObj);
+		this.position = getPosition(stateObj);
+		if (this.position)
+			this.position = 100 - this.position;
     }
 
     private onCurrentPositionChange(e: CustomEvent<{ value?: number }>): void {
         if (e.detail.value != null) {
             this.position = e.detail.value;
+			if (this.position)
+				this.position = 100 - this.position;
         }
     }
 
     private _handleAction(ev: ActionHandlerEvent) {
         handleAction(this, this.hass!, this._config!, ev.detail.action!);
+    }
+
+	public isTemplate(key: TemplateKey) {
+        const value = this._config?.[key];
+        return value?.includes("{");
+    }
+
+    private getValue(key: TemplateKey) {
+        return this.isTemplate(key)
+            ? this._templateResults[key]?.result?.toString()
+            : this._config?.[key];
     }
 
     protected render() {
@@ -164,14 +212,21 @@ export class CoverCard
         }
 
         const stateObj = this._stateObj;
+		const secondary = this.getValue("secondary");
 
-        if (!stateObj) {
+		if (!stateObj) {
             return this.renderNotFound(this._config);
         }
 
-        const name = this._config.name || stateObj.attributes.friendly_name || "";
+		const name = this._config.name || stateObj.attributes.friendly_name || "";
+		// const name = this.getValue("secondary");
         const icon = this._config.icon;
         const appearance = computeAppearance(this._config);
+        // const appearance = computeAppearance({
+		// 	fill_container: this._config.fill_container,
+		// 	layout: this._config.layout,
+		// 	secondary_info: Boolean(secondary) ? "state" : "none",
+		// });
         const picture = computeEntityPicture(stateObj, appearance.icon_type);
 
         let stateDisplay = this.hass.formatEntityState
@@ -203,8 +258,8 @@ export class CoverCard
                     >
                         ${picture ? this.renderPicture(picture) : this.renderIcon(stateObj, icon)}
                         ${this.renderBadge(stateObj)}
-                        ${this.renderStateInfo(stateObj, appearance, name, stateDisplay)};
-                    </mushroom-state-item>
+						${this.renderStateInfo(stateObj, appearance, name, secondary)};
+					</mushroom-state-item>
                     ${this._controls.length > 0
                         ? html`
                               <div class="actions" ?rtl=${rtl}>
@@ -216,6 +271,95 @@ export class CoverCard
                 </mushroom-card>
             </ha-card>
         `;
+    }
+
+    // protected updated(changedProps: PropertyValues): void {
+    //     super.updated(changedProps);
+    //     if (!this._config || !this.hass) {
+    //         return;
+    //     }
+
+    //     this._tryConnect();
+    // }
+
+    private async _tryConnect(): Promise<void> {
+        TEMPLATE_KEYS.forEach((key) => {
+            this._tryConnectKey(key);
+        });
+    }
+
+    private async _tryConnectKey(key: TemplateKey): Promise<void> {
+        if (
+            this._unsubRenderTemplates.get(key) !== undefined ||
+            !this.hass ||
+            !this._config ||
+            !this.isTemplate(key)
+        ) {
+            return;
+        }
+
+        try {
+            const sub = subscribeRenderTemplate(
+                this.hass.connection,
+                (result) => {
+                    this._templateResults = {
+                        ...this._templateResults,
+                        [key]: result,
+                    };
+                },
+                {
+                    template: this._config[key] ?? "",
+                    entity_ids: this._config.entity_id,
+                    variables: {
+                        config: this._config,
+                        user: this.hass.user!.name,
+                        entity: this._config.entity,
+                    },
+                    strict: true,
+                }
+            );
+            this._unsubRenderTemplates.set(key, sub);
+            await sub;
+        } catch (_err) {
+            const result = {
+                result: this._config[key] ?? "",
+                listeners: {
+                    all: false,
+                    domains: [],
+                    entities: [],
+                    time: false,
+                },
+            };
+            this._templateResults = {
+                ...this._templateResults,
+                [key]: result,
+            };
+            this._unsubRenderTemplates.delete(key);
+        }
+    }
+    private async _tryDisconnect(): Promise<void> {
+        TEMPLATE_KEYS.forEach((key) => {
+            this._tryDisconnectKey(key);
+        });
+    }
+
+    private async _tryDisconnectKey(key: TemplateKey): Promise<void> {
+        const unsubRenderTemplate = this._unsubRenderTemplates.get(key);
+        if (!unsubRenderTemplate) {
+            return;
+        }
+
+        try {
+            const unsub = await unsubRenderTemplate;
+            unsub();
+            this._unsubRenderTemplates.delete(key);
+        } catch (err: any) {
+            if (err.code === "not_found" || err.code === "template_error") {
+                // If we get here, the connection was probably already closed. Ignore.
+            } else {
+                throw err;
+            }
+        }
     }
 
     protected renderIcon(stateObj: CoverEntity, icon?: string): TemplateResult {

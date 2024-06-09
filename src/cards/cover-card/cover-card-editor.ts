@@ -10,7 +10,7 @@ import { GENERIC_LABELS } from "../../utils/form/generic-fields";
 import { HaFormSchema } from "../../utils/form/ha-form";
 import { loadHaComponents } from "../../utils/loader";
 import { COVER_CARD_EDITOR_NAME, COVER_ENTITY_DOMAINS } from "./const";
-import { CoverCardConfig, coverCardConfigStruct } from "./cover-card-config";
+import { FreeCoverCardConfig, FreecoverCardConfigStruct } from "./cover-card-config";
 
 const COVER_LABELS = [
     "show_buttons_control",
@@ -22,7 +22,8 @@ const SCHEMA: HaFormSchema[] = [
     { name: "entity", selector: { entity: { domain: COVER_ENTITY_DOMAINS } } },
     { name: "name", selector: { text: {} } },
     { name: "icon", selector: { icon: {} }, context: { icon_entity: "entity" } },
-    ...APPEARANCE_FORM_SCHEMA,
+	{ name: "secondary", selector: { template: {} } },
+	...APPEARANCE_FORM_SCHEMA,
     {
         type: "grid",
         name: "",
@@ -36,16 +37,16 @@ const SCHEMA: HaFormSchema[] = [
 ];
 
 @customElement(COVER_CARD_EDITOR_NAME)
-export class CoverCardEditor extends MushroomBaseElement implements LovelaceCardEditor {
-    @state() private _config?: CoverCardConfig;
+export class FreeCoverCardEditor extends MushroomBaseElement implements LovelaceCardEditor {
+    @state() private _config?: FreeCoverCardConfig;
 
     connectedCallback() {
         super.connectedCallback();
         void loadHaComponents();
     }
 
-    public setConfig(config: CoverCardConfig): void {
-        assert(config, coverCardConfigStruct);
+    public setConfig(config: FreeCoverCardConfig): void {
+        assert(config, FreecoverCardConfigStruct);
         this._config = config;
     }
 
