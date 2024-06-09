@@ -1,3 +1,14 @@
+# Fork-Infos
+
+- added the possibility to use templating with the secondary_info in the cover card
+- purpose for me was to enable a nice way to invert the position of the cover
+
+known bugs: 
+- the slider is not reflecting the current status
+- currently not usable with the original mushroom cards
+
+
+
 # 🍄 Mushroom
 
 [![hacs][hacs-badge]][hacs-url]

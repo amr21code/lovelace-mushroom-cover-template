@@ -179,15 +179,11 @@ export class CoverCardCustom
 
         if (!stateObj) return;
 		this.position = getPosition(stateObj);
-		if (this.position)
-			this.position = 100 - this.position;
     }
 
     private onCurrentPositionChange(e: CustomEvent<{ value?: number }>): void {
         if (e.detail.value != null) {
             this.position = e.detail.value;
-			if (this.position)
-				this.position = 100 - this.position;
         }
     }
 
